@@ -7,7 +7,7 @@ router.post("/", async (req, res) => {
   const formData = req.body;
   console.log(formData)
 
-  const transaction_id = `TX-${Date.now()}`; // Génère un ID unique
+  const transaction_id = Math.floor(Math.random() * 100000000).toString(); // Génère un ID unique
 
   const payload = {
     apikey: process.env.CINETPAY_API_KEY,
@@ -19,15 +19,24 @@ router.post("/", async (req, res) => {
     customer_name: formData.firstName,
     customer_surname: formData.lastName,
     customer_email: formData.email,
-    customer_phone_number: `225${formData.phone.replace(/^(\+225)?/, "")}`,
-    customer_address: "",
-    customer_city: "",
-    customer_country: formData.country.toUpperCase(), // ✅ forcé en majuscules ISO-2
+    customer_phone_number: `225${formData.phone}`, // avec indicatif pays sans "+"
+    customer_address: "Abidjan", // mettre une valeur par défaut
+    customer_city: "Abidjan", // idem
+    customer_country: formData.country.toUpperCase(), // CI
+    customer_state: formData.country.toUpperCase(), // CM si Cameroun, CI pour Côte d’Ivoire
+    customer_zip_code: "00000",
     notify_url: process.env.NOTIFY_URL,
     return_url: process.env.RETURN_URL,
     channels: "ALL",
-    lang: "fr",
+    metadata: "user-registration",
+    lang: "FR",
+    invoice_data: {
+      Donnee1: "",
+      Donnee2: "",
+      Donnee3: "",
+    },
   };
+
 
   console.log(payload)
 

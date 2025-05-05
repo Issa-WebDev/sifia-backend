@@ -13,7 +13,7 @@ router.post("/", async (req, res) => {
     apikey: process.env.CINETPAY_API_KEY,
     site_id: process.env.CINETPAY_SITE_ID,
     transaction_id,
-    amount: 100,
+    amount: 500,
     currency: "XOF",
     description: `Paiement inscription ${formData.firstName} ${formData.lastName}`,
     customer_name: formData.firstName,

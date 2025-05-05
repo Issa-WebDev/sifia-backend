@@ -25,8 +25,11 @@ router.post("/", async (req, res) => {
     customer_country: formData.country.toUpperCase(), // CI
     customer_state: formData.country.toUpperCase(), // CM si Cameroun, CI pour Côte d’Ivoire
     customer_zip_code: "00000",
-    notify_url: process.env.NOTIFY_URL,
-    return_url: process.env.RETURN_URL,
+    // notify_url: process.env.NOTIFY_URL,
+    // return_url: process.env.RETURN_URL,
+    notify_url: "https://webhook.site/d1dbbb89-52c7-49af-a689-b3c412df820d",
+    return_url: "https://webhook.site/d1dbbb89-52c7-49af-a689-b3c412df820d",
+
     channels: "ALL",
     metadata: "user-registration",
     lang: "FR",

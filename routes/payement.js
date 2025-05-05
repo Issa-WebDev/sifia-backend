@@ -19,7 +19,7 @@ router.post("/", async (req, res) => {
     customer_name: formData.firstName,
     customer_surname: formData.lastName,
     customer_email: formData.email,
-    customer_phone_number: `225${formData.phone}`, // avec indicatif pays sans "+"
+    customer_phone_number: `+225${formData.phone}`, // avec indicatif pays sans "+"
     customer_address: "Abidjan", // mettre une valeur par défaut
     customer_city: "Abidjan", // idem
     customer_country: formData.country.toUpperCase(), // CI

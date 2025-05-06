@@ -43,7 +43,7 @@ app.get("/", (req, res) => {
   res.send("SIFIA 2025 API is running");
 });
 app.use("/api/contact", contactRoutes);
-app.use("/api", paymentRoutes);
+app.use("/api/payment", paymentRoutes);
 
 // Test email configuration on startup
 emailTransporter.verify((error) => {

@@ -16,7 +16,7 @@ const generateConfirmationCode = () => {
 };
 
 // Initiate payment with CinetPay
-router.post("/payment", async (req, res) => {
+router.post("/", async (req, res) => {
   try {
     const {
       firstName,

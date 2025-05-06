@@ -3,7 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import contactRoutes from "./routes/contactRoutes.js";
 import { createTransport } from "nodemailer";
-import paymentRoutes from "./routes/payment.js";
+import paymentRoutes from "./routes/payment.js"
 import mongoose from "mongoose";
 
 dotenv.config();

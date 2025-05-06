@@ -87,26 +87,28 @@ router.post("/", async (req, res) => {
     const cancelUrl = `${process.env.FRONTEND_URL}/payment-failure`;
 
     // Create transaction ID
-    const transactionId = `SIFIA-${Date.now()}-${crypto
-      .randomBytes(3)
-      .toString("hex")}`;
+    // const transactionId = `SIFIA-${Date.now()}-${crypto
+    //   .randomBytes(3)
+    //   .toString("hex")}`;
 
     // CinetPay payment data
     const paymentData = {
       apikey: apiKey,
       site_id: siteId,
-      transaction_id: transactionId,
+      transaction_id: Math.floor(Math.random() * 100000000).toString(),
       amount: amount,
       currency: currency,
+      alternative_currency: "",
       description: `SIFIA 2025 - ${participantType} - ${packageName}`,
+      customer_id: "172",
       customer_name: firstName + " " + lastName,
       customer_email: email,
-      customer_phone_number: phone.startsWith('+') ? phone.slice(1) : phone,
+      customer_phone_number: phone.startsWith("+") ? phone.slice(1) : phone,
       customer_address: country,
-      customer_city: "N/A",
+      customer_city: "",
       customer_country: country,
-      customer_state: "N/A",
-      customer_zip_code: "N/A",
+      customer_state: "",
+      customer_zip_code: "",
       notify_url: notifyUrl,
       return_url: returnUrl,
       cancel_url: cancelUrl,

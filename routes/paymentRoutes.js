@@ -16,7 +16,7 @@ const generateConfirmationCode = () => {
 };
 
 // Initiate payment with CinetPay
-router.post("/", async (req, res) => {
+router.post("/payment", async (req, res) => {
   try {
     const {
       firstName,
@@ -87,15 +87,15 @@ router.post("/", async (req, res) => {
     const cancelUrl = `${process.env.FRONTEND_URL}/payment-failure`;
 
     // Create transaction ID
-    // const transactionId = `SIFIA-${Date.now()}-${crypto
-    //   .randomBytes(3)
-    //   .toString("hex")}`;
+    const transactionId = `SIFIA-${Date.now()}-${crypto
+      .randomBytes(3)
+      .toString("hex")}`;
 
     // CinetPay payment data
     const paymentData = {
       apikey: apiKey,
       site_id: siteId,
-      transaction_id: Math.floor(Math.random() * 100000000).toString(),
+      transaction_id: transactionId,
       amount: amount,
       currency: currency,
       alternative_currency: "",

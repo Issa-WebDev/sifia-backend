@@ -101,7 +101,7 @@ router.post("/", async (req, res) => {
       description: `SIFIA 2025 - ${participantType} - ${packageName}`,
       customer_name: firstName + " " + lastName,
       customer_email: email,
-      customer_phone_number: phone,
+      customer_phone_number: phone.startsWith('+') ? phone.slice(1) : phone,
       customer_address: country,
       customer_city: "N/A",
       customer_country: country,

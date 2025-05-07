@@ -103,7 +103,7 @@ router.post("/", async (req, res) => {
       customer_id: "172",
       customer_name: firstName + " " + lastName,
       customer_email: email,
-      customer_phone_number: phone.startsWith("+") ? phone.slice(1) : phone,
+      customer_phone_number: phone,
       customer_address: country,
       customer_city: "",
       customer_country: country,

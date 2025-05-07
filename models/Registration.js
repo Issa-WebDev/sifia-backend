@@ -31,6 +31,21 @@ const registrationSchema = new mongoose.Schema({
     required: true,
     trim: true,
   },
+  postal: {
+    type: String,
+    required: true,
+    trim: true,
+  },
+  city: {
+    type: String,
+    required: true,
+    trim: true,
+  },
+  address: {
+    type: String,
+    required: true,
+    trim: true,
+  },
   participantTypeId: {
     type: String,
     required: true,

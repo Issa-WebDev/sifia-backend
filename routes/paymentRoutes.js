@@ -25,6 +25,9 @@ router.post("/", async (req, res) => {
       phone,
       company,
       country,
+      postal,
+      city,
+      address,
       participantTypeId,
       participantType,
       packageId,
@@ -42,6 +45,9 @@ router.post("/", async (req, res) => {
       !lastName ||
       !email ||
       !phone ||
+      !postal ||
+      !city ||
+      !address ||
       !participantTypeId ||
       !packageId ||
       !amount ||
@@ -64,6 +70,9 @@ router.post("/", async (req, res) => {
       phone,
       company,
       country,
+      postal,
+      city,
+      address,
       participantTypeId,
       participantType,
       packageId,
@@ -91,7 +100,7 @@ router.post("/", async (req, res) => {
       .randomBytes(3)
       .toString("hex")}`;
 
-      // `SIFIA-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    // `SIFIA-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
     // CinetPay payment data
     const paymentData = {
@@ -102,16 +111,16 @@ router.post("/", async (req, res) => {
       currency: currency,
       alternative_currency: "",
       description: `SIFIA 2025 - ${participantType} - ${packageName}`,
-      customer_id: "172",
+      customer_id: registration._id,
       customer_name: firstName,
       customer_surname: lastName,
       customer_email: email,
       customer_phone_number: phone.startsWith("+") ? phone.slice(1) : phone,
-      customer_address: "BP 0024",
-      customer_city: "Abidjan",
+      customer_address: address,
+      customer_city: city,
       customer_state: country,
       customer_country: country,
-      customer_zip_code: "00225",
+      customer_zip_code: postal,
       notify_url: notifyUrl,
       return_url: returnUrl,
       cancel_url: cancelUrl,

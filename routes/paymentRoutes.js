@@ -91,6 +91,8 @@ router.post("/", async (req, res) => {
       .randomBytes(3)
       .toString("hex")}`;
 
+      // `SIFIA-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
     // CinetPay payment data
     const paymentData = {
       apikey: apiKey,

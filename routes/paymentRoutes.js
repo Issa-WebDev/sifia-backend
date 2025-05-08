@@ -5,17 +5,37 @@ import Registration from "../models/Registration.js";
 import {
   sendConfirmationEmail,
   sendOrganizationEmail,
+  sendInstallmentEmail,
 } from "../utils/emailService.js";
+import installmentRoutes from "./installmentRoutes.js";
 
 const router = express.Router();
 
-// Generate a unique confirmation code
+// Constants
+const MAX_PAYMENT_AMOUNT = 999999; // Maximum amount per CinetPay transaction (999,999 FCFA)
+
+// Use installment routes
+router.use("/installments", installmentRoutes);
+
 const generateConfirmationCode = () => {
   const randomPart = crypto.randomBytes(3).toString("hex").toUpperCase();
   return `SIFIA-2025-${randomPart}`;
 };
 
-// Initiate payment with CinetPay
+// Helper function to split amount into installments
+const splitAmountIntoInstallments = (totalAmount) => {
+  const installments = [];
+  let remainingAmount = totalAmount;
+
+  while (remainingAmount > 0) {
+    const installmentAmount = Math.min(remainingAmount, MAX_PAYMENT_AMOUNT);
+    installments.push(installmentAmount);
+    remainingAmount -= installmentAmount;
+  }
+
+  return installments;
+};
+
 router.post("/", async (req, res) => {
   try {
     const {
@@ -39,7 +59,6 @@ router.post("/", async (req, res) => {
       language,
     } = req.body;
 
-    // Validate required fields
     if (
       !firstName ||
       !lastName ||
@@ -59,56 +78,97 @@ router.post("/", async (req, res) => {
         .json({ success: false, message: "Missing required fields" });
     }
 
-    // Generate a unique confirmation code
     const confirmationCode = generateConfirmationCode();
 
-    // Create a new registration record
-    const registration = new Registration({
-      firstName,
-      lastName,
-      email,
-      phone,
-      company,
-      country,
-      postal,
-      city,
-      address,
-      participantTypeId,
-      participantType,
-      packageId,
-      packageName,
-      sector,
-      additionalInfo,
-      amount,
-      currency,
-      confirmationCode,
-      language,
-    });
+    let registration = await Registration.findOne({ email, packageId });
 
-    // Save registration to database
+    if (!registration) {
+      registration = new Registration({
+        firstName,
+        lastName,
+        email,
+        phone,
+        company,
+        country,
+        postal,
+        city,
+        address,
+        participantTypeId,
+        participantType,
+        packageId,
+        packageName,
+        sector,
+        additionalInfo,
+        amount,
+        currency,
+        confirmationCode,
+        language,
+      });
+
+      await registration.save();
+    }
+
+    // Check if we need to split the payment into installments
+    if (amount > MAX_PAYMENT_AMOUNT) {
+      // Create installments for this registration
+      const installmentAmounts = splitAmountIntoInstallments(amount);
+
+      const installments = installmentAmounts.map(
+        (installmentAmount, index) => {
+          const transactionId = `SIFIA-INST-${Date.now()}-${index}-${crypto
+            .randomBytes(3)
+            .toString("hex")}`;
+
+          return {
+            amount: installmentAmount,
+            status: "pending",
+            transactionId,
+            index,
+          };
+        }
+      );
+
+      registration.installments = installments;
+      await registration.save();
+
+      // Redirect to the installment payment page
+      return res.status(200).json({
+        success: true,
+        message: "Registration requires installment payments",
+        registration_id: registration._id,
+        requires_installments: true,
+        total_installments: installments.length,
+      });
+    }
+
+    // Process as a single payment if the amount is under the limit
+    const transactionId = `SIFIA-${Date.now()}-${crypto
+      .randomBytes(3)
+      .toString("hex")}`;
+
+    // Create a single installment for tracking
+    const singleInstallment = {
+      amount,
+      status: "pending",
+      transactionId,
+      index: 0,
+    };
+
+    registration.installments = [singleInstallment];
     await registration.save();
 
-    // CinetPay configuration
     const siteId = process.env.CINETPAY_SITE_ID;
     const apiKey = process.env.CINETPAY_API_KEY;
     const notifyUrl = `${process.env.BACKEND_URL}/api/payment/notify`;
     const returnUrl = `${process.env.FRONTEND_URL}/payment-success`;
     const cancelUrl = `${process.env.FRONTEND_URL}/payment-failure`;
 
-    // Create transaction ID
-    const transactionId = `SIFIA-${Date.now()}-${crypto
-      .randomBytes(3)
-      .toString("hex")}`;
-
-    // `SIFIA-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-
-    // CinetPay payment data
     const paymentData = {
       apikey: apiKey,
       site_id: siteId,
       transaction_id: transactionId,
-      amount: amount,
-      currency: currency,
+      amount,
+      currency,
       alternative_currency: "",
       description: `SIFIA 2025 - ${participantType} - ${packageName}`,
       customer_id: registration._id,
@@ -126,21 +186,19 @@ router.post("/", async (req, res) => {
       cancel_url: cancelUrl,
       channels: "ALL",
       lang: language === "fr" ? "fr" : "en",
-      metadata: JSON.stringify({ registration_id: registration._id }),
+      metadata: JSON.stringify({
+        registration_id: registration._id,
+        installment_id: registration.installments[0]._id,
+        is_installment: false,
+      }),
     };
 
-    // Initiate payment request to CinetPay
     const response = await axios.post(
       "https://api-checkout.cinetpay.com/v2/payment",
       paymentData
     );
 
     if (response.data && response.data.data) {
-      // Update registration with transaction ID
-      registration.transactionId = transactionId;
-      await registration.save();
-
-      // Return the payment URL
       return res.status(200).json({
         success: true,
         message: "Payment session created",
@@ -159,7 +217,6 @@ router.post("/", async (req, res) => {
   }
 });
 
-// CinetPay notification handler (Webhook)
 router.post("/notify", async (req, res) => {
   try {
     const {
@@ -168,6 +225,7 @@ router.post("/notify", async (req, res) => {
       cpm_trans_status,
       cpm_payment_date,
       cpm_payment_method,
+      cpm_custom,
     } = req.body;
 
     if (!cpm_trans_id || !cpm_site_id || !cpm_trans_status) {
@@ -176,7 +234,6 @@ router.post("/notify", async (req, res) => {
         .json({ success: false, message: "Invalid notification data" });
     }
 
-    // Verify the notification with CinetPay
     const verifyData = {
       apikey: process.env.CINETPAY_API_KEY,
       site_id: process.env.CINETPAY_SITE_ID,
@@ -188,15 +245,54 @@ router.post("/notify", async (req, res) => {
       verifyData
     );
 
-    if (
-      verifyResponse.data &&
-      verifyResponse.data.data &&
-      verifyResponse.data.data.status === "ACCEPTED"
-    ) {
-      // Find registration by transaction ID
-      const registration = await Registration.findOne({
-        transactionId: cpm_trans_id,
-      });
+    // Parse the metadata
+    let metadata = {};
+    if (cpm_custom) {
+      try {
+        metadata = JSON.parse(cpm_custom);
+      } catch (e) {
+        console.error("Error parsing metadata:", e);
+      }
+    }
+
+    if (verifyResponse.data?.data?.status === "ACCEPTED") {
+      // Find registration either by direct transaction ID or through installment
+      let registration = null;
+      let installment = null;
+
+      if (metadata.is_installment) {
+        // This is an installment payment
+        registration = await Registration.findById(metadata.registration_id);
+
+        if (registration && metadata.installment_id) {
+          installment = registration.installments.id(metadata.installment_id);
+        } else {
+          // Fallback to finding by transaction ID if IDs are missing
+          registration = await Registration.findOne({
+            "installments.transactionId": cpm_trans_id,
+          });
+
+          if (registration) {
+            installment = registration.installments.find(
+              (i) => i.transactionId === cpm_trans_id
+            );
+          }
+        }
+      } else {
+        // This could be a single payment or legacy payment
+        registration = await Registration.findOne({
+          $or: [
+            { transactionId: cpm_trans_id },
+            { "installments.transactionId": cpm_trans_id },
+          ],
+        });
+
+        if (registration) {
+          installment = registration.installments.find(
+            (i) => i.transactionId === cpm_trans_id
+          );
+        }
+      }
 
       if (!registration) {
         return res
@@ -204,38 +300,89 @@ router.post("/notify", async (req, res) => {
           .json({ success: false, message: "Registration not found" });
       }
 
-      // Update registration with payment details
-      registration.paymentStatus = "completed";
-      registration.paymentMethod = cpm_payment_method || "CinetPay";
-      registration.paymentDate = new Date(cpm_payment_date * 1000);
+      const paymentDate = new Date(cpm_payment_date * 1000);
 
-      await registration.save();
-
-      // Send confirmation emails
-      await sendConfirmationEmail(registration);
-      await sendOrganizationEmail(registration);
-
-      // Update email sent status
-      registration.emailSent = true;
-      await registration.save();
-
-      return res
-        .status(200)
-        .json({ success: true, message: "Payment confirmed and processed" });
-    } else {
-      // Payment failed or was rejected
-      const registration = await Registration.findOne({
-        transactionId: cpm_trans_id,
-      });
-
-      if (registration) {
-        registration.paymentStatus = "failed";
-        await registration.save();
+      // Update installment status
+      if (installment) {
+        installment.status = "completed";
+        installment.paymentDate = paymentDate;
+        installment.paymentMethod = cpm_payment_method || "CinetPay";
       }
 
-      return res
-        .status(200)
-        .json({ success: false, message: "Payment failed or rejected" });
+      await registration.save();
+
+      // Check if this completes all installments
+      const isFullyPaid = registration.installments.every(
+        (inst) => inst.status === "completed"
+      );
+
+      if (isFullyPaid) {
+        registration.paymentStatus = "completed";
+        registration.paymentMethod = cpm_payment_method || "CinetPay";
+        registration.paymentDate = paymentDate;
+
+        // Send completion email only if all installments are paid
+        if (!registration.emailSent) {
+          await sendConfirmationEmail(registration);
+          await sendOrganizationEmail(registration);
+          registration.emailSent = true;
+        }
+      } else {
+        // Send installment confirmation email
+        await sendInstallmentEmail(
+          registration,
+          installment,
+          registration.installments.length
+        );
+      }
+
+      await registration.save();
+
+      return res.status(200).json({
+        success: true,
+        message: "Payment confirmed and processed",
+      });
+    } else {
+      // Payment failed
+      let registration = null;
+
+      if (
+        metadata.is_installment &&
+        metadata.registration_id &&
+        metadata.installment_id
+      ) {
+        registration = await Registration.findById(metadata.registration_id);
+
+        if (registration) {
+          const installment = registration.installments.id(
+            metadata.installment_id
+          );
+          if (installment) {
+            installment.status = "failed";
+            await registration.save();
+          }
+        }
+      } else {
+        registration = await Registration.findOne({
+          "installments.transactionId": cpm_trans_id,
+        });
+
+        if (registration) {
+          const installment = registration.installments.find(
+            (i) => i.transactionId === cpm_trans_id
+          );
+
+          if (installment) {
+            installment.status = "failed";
+            await registration.save();
+          }
+        }
+      }
+
+      return res.status(200).json({
+        success: false,
+        message: "Payment failed or rejected",
+      });
     }
   } catch (error) {
     console.error("Payment notification error:", error);
@@ -247,21 +394,22 @@ router.post("/notify", async (req, res) => {
   }
 });
 
-// Payment verification endpoint
 router.get("/verify", async (req, res) => {
   try {
-    const { transaction_id, cpm_trans_id } = req.query;
+    const { transaction_id, cpm_trans_id, registration_id } = req.query;
 
-    if (!transaction_id && !cpm_trans_id) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Transaction ID is required" });
+    let registration = null;
+
+    if (registration_id) {
+      registration = await Registration.findById(registration_id);
+    } else if (transaction_id || cpm_trans_id) {
+      registration = await Registration.findOne({
+        $or: [
+          { "installments.transactionId": transaction_id },
+          { "installments.transactionId": cpm_trans_id },
+        ],
+      });
     }
-
-    // Find registration by transaction ID
-    const registration = await Registration.findOne({
-      $or: [{ transactionId: transaction_id }, { transactionId: cpm_trans_id }],
-    });
 
     if (!registration) {
       return res
@@ -269,29 +417,34 @@ router.get("/verify", async (req, res) => {
         .json({ success: false, message: "Registration not found" });
     }
 
-    // Check if payment is completed
-    if (registration.paymentStatus === "completed") {
-      return res.status(200).json({
-        success: true,
-        message: "Payment verified",
-        paymentData: {
-          confirmationCode: registration.confirmationCode,
-          firstName: registration.firstName,
-          lastName: registration.lastName,
-          participantType: registration.participantType,
-          packageName: registration.packageName,
-          amount: registration.amount,
-          currency: registration.currency,
-          paymentDate: registration.paymentDate,
-        },
-      });
-    } else {
-      return res.status(200).json({
-        success: false,
-        message: "Payment not completed",
-        status: registration.paymentStatus,
-      });
-    }
+    // Calculate total paid amount
+    const totalPaid = registration.installments
+      .filter((i) => i.status === "completed")
+      .reduce((sum, i) => sum + i.amount, 0);
+
+    const percentagePaid = (totalPaid / registration.amount) * 100;
+
+    return res.status(200).json({
+      success: true,
+      message:
+        registration.paymentStatus === "completed"
+          ? "Payment verified"
+          : "Payment pending",
+      paymentData: {
+        confirmationCode: registration.confirmationCode,
+        firstName: registration.firstName,
+        lastName: registration.lastName,
+        participantType: registration.participantType,
+        packageName: registration.packageName,
+        amount: registration.amount,
+        currency: registration.currency,
+        paymentStatus: registration.paymentStatus,
+        totalPaid: totalPaid,
+        percentagePaid: percentagePaid,
+        isFullyPaid: registration.isFullyPaid,
+        installments: registration.installments,
+      },
+    });
   } catch (error) {
     console.error("Payment verification error:", error);
     return res.status(500).json({

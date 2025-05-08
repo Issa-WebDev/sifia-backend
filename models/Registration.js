@@ -1,5 +1,32 @@
 import mongoose from "mongoose";
 
+const installmentSchema = new mongoose.Schema({
+  amount: {
+    type: Number,
+    required: true,
+  },
+  status: {
+    type: String,
+    enum: ["pending", "completed", "failed"],
+    default: "pending",
+  },
+  transactionId: {
+    type: String,
+    required: true,
+  },
+  paymentDate: {
+    type: Date,
+  },
+  paymentMethod: {
+    type: String,
+    trim: true,
+  },
+  index: {
+    type: Number,
+    required: true,
+  },
+});
+
 const registrationSchema = new mongoose.Schema({
   firstName: {
     type: String,
@@ -97,10 +124,6 @@ const registrationSchema = new mongoose.Schema({
     type: String,
     trim: true,
   },
-  transactionId: {
-    type: String,
-    trim: true,
-  },
   paymentDate: {
     type: Date,
   },
@@ -112,6 +135,18 @@ const registrationSchema = new mongoose.Schema({
     type: String,
     enum: ["en", "fr"],
     default: "fr",
+  },
+  installments: {
+    type: [installmentSchema],
+    default: [],
+  },
+  totalPaid: {
+    type: Number,
+    default: 0,
+  },
+  isFullyPaid: {
+    type: Boolean,
+    default: false,
   },
   createdAt: {
     type: Date,
@@ -126,6 +161,41 @@ const registrationSchema = new mongoose.Schema({
 // Update the updatedAt field on save
 registrationSchema.pre("save", function (next) {
   this.updatedAt = Date.now();
+  next();
+});
+
+// Calculate total paid amount and update isFullyPaid status
+registrationSchema.pre("save", function (next) {
+  if (this.installments && this.installments.length > 0) {
+    // Calculate total paid
+    this.totalPaid = this.installments
+      .filter((installment) => installment.status === "completed")
+      .reduce((sum, installment) => sum + installment.amount, 0);
+
+    // Check if fully paid
+    this.isFullyPaid = this.totalPaid >= this.amount;
+
+    // Update payment status based on installments
+    if (this.isFullyPaid) {
+      this.paymentStatus = "completed";
+
+      // Set payment date to the latest installment payment date if not already set
+      if (!this.paymentDate && this.installments.some((i) => i.paymentDate)) {
+        const paidInstallments = this.installments
+          .filter((i) => i.paymentDate)
+          .sort(
+            (a, b) =>
+              new Date(b.paymentDate).getTime() -
+              new Date(a.paymentDate).getTime()
+          );
+
+        if (paidInstallments.length > 0) {
+          this.paymentDate = paidInstallments[0].paymentDate;
+        }
+      }
+    }
+  }
+
   next();
 });
 

@@ -4,7 +4,10 @@ import dotenv from "dotenv";
 import contactRoutes from "./routes/contactRoutes.js";
 import { createTransport } from "nodemailer";
 import paymentRoutes from "./routes/paymentRoutes.js";
+import loginRoutes from "./routes/adminRoutes.js"
+import registerRoutes from "./routes/adminRoutes.js";
 import mongoose from "mongoose";
+const router = express.Router();
 
 dotenv.config();
 
@@ -42,6 +45,9 @@ export const emailTransporter = createTransport({
 app.get("/", (req, res) => {
   res.send("SIFIA 2025 API is running");
 });
+
+router.use("/login", loginRoutes)
+router.use("/registrations", registerRoutes);
 app.use("/api/contact", contactRoutes);
 app.use("/api/payment", paymentRoutes);
 
